@@ -1,0 +1,69 @@
+name: Deploy to GitHub Pages
+
+on:
+  # mainブランチに変更がプッシュされたら実行
+  push:
+    branches: ["main"]
+  # 手動実行も可能にする
+  workflow_dispatch:
+
+# 権限の設定（Pagesへのデプロイに必須）
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # --- 1. Rust & WASM のビルド ---
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build WASM
+        # Rustのディレクトリへ移動してビルド（出力先はReactのsrc/pkg）
+        run: |
+          cd cv-pipe-wasm-rust
+          wasm-pack build --target web --out-dir ../cv-pipe-wast-demo/src/pkg
+
+      # --- 2. React のビルド ---
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Dependencies
+        run: |
+          cd cv-pipe-wasm-demo
+          npm install
+
+      - name: Build React App
+        run: |
+          cd cv-pipe-wasm-demo
+          npm run build
+
+      # --- 3. GitHub Pages へのデプロイ ---
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Viteのビルド出力ディレクトリを指定
+          path: './cv-pipe-wasm-demo/dist'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
