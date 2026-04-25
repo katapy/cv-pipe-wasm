@@ -39,7 +39,7 @@ jobs:
         # Rustのディレクトリへ移動してビルド（出力先はReactのsrc/pkg）
         run: |
           cd cv-pipe-wasm-rust
-          wasm-pack build --target web --out-dir ../cv-pipe-wast-demo/src/pkg
+          wasm-pack build --target web --out-dir ../cv-pipe-wasm-demo/src/pkg
 
       # --- 2. React のビルド ---
       - name: Setup Node.js
