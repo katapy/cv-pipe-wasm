@@ -69,7 +69,7 @@ const App = () => {
       
       // WASMから返ってきた Uint8Array を ImageData に戻して描画
       const resultImageData = new ImageData(
-        new Uint8ClampedArray(result.buffer), 
+        new Uint8ClampedArray(result.buffer as ArrayBuffer), 
         width, 
         height
       );
