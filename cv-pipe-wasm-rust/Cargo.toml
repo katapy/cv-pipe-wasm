@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 wasm-bindgen = "0.2"
 # 画像処理の基本計算用（自前実装の練習にも良い）
-image = { version = "0.24", default-features = false }
+image = { version = "0.24", features = ["jpeg", "png"] }
