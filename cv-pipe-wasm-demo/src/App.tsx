@@ -169,7 +169,7 @@ const App = () => {
         </Button>
       </Stack>
 
-      <Stack direction="row" spacing={4} alignItems="flex-start">
+      <Stack direction="row" spacing={4} sx={{ alignItems: 'flex-start' }}>
         <Box>
           <Typography variant="h6">Source (Before)</Typography>
           <canvas 
