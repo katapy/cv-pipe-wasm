@@ -1,20 +1,23 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Button, Container, Stack, Typography, Box } from '@mui/material';
 import init, { CvPipe } from './pkg/cv_pipe_wasm';
+import wasmUrl from './pkg/cv_pipe_wasm_bg.wasm?url';
 
 const App = () => {
   const [isWasmLoaded, setIsWasmLoaded] = useState(false);
   
-  // Canvasへの参照を保持する
   const sourceCanvasRef = useRef<HTMLCanvasElement>(null);
   const resultCanvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    // WASMの初期化
-    init().then(() => setIsWasmLoaded(true));
+    init(wasmUrl)
+      .then(() => {
+        console.log("WASM Initialized");
+        setIsWasmLoaded(true);
+      })
+      .catch((err) => console.error("WASM init failed:", err));
   }, []);
 
-  // 1. 画像アップロードとCanvasへの描画
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -25,16 +28,13 @@ const App = () => {
       const canvas = sourceCanvasRef.current;
       if (!canvas) return;
       
-      // 元画像のサイズに合わせてCanvasをリサイズ
       canvas.width = img.width;
       canvas.height = img.height;
       const ctx = canvas.getContext('2d');
-      // 画像を描画
       ctx?.drawImage(img, 0, 0);
     };
   };
 
-  // 2. WASMによる画像処理
   const handleProcess = () => {
     const srcCanvas = sourceCanvasRef.current;
     const resCanvas = resultCanvasRef.current;
@@ -46,30 +46,29 @@ const App = () => {
     const width = srcCanvas.width;
     const height = srcCanvas.height;
     
-    // Canvasからピクセルデータ(RGBA)を取得
     const imageData = ctx.getImageData(0, 0, width, height);
-    // Uint8ClampedArray を Uint8Array に変換
     const data = new Uint8Array(imageData.data.buffer);
-    console.log(data.length, width * height * 4)
 
     try {
-      console.time("WASM Processing"); // 処理速度計測用
+      console.time("WASM Processing");
 
       // CvPipe インスタンスを作成して処理
       const pipe = new CvPipe(data, width, height);
       pipe.to_gray();
       const result = pipe.get_data();
+      
+      // 【重要】メモリリークを防ぐため、WASM側のRust構造体を破棄する
+      pipe.free();
 
       console.timeEnd("WASM Processing");
 
-      // 結果描画用Canvasをリサイズ
       resCanvas.width = width;
       resCanvas.height = height;
       const resCtx = resCanvas.getContext('2d');
       
-      // WASMから返ってきた Uint8Array を ImageData に戻して描画
+      // 【重要】 result.buffer ではなく result を直接渡す
       const resultImageData = new ImageData(
-        new Uint8ClampedArray(result.buffer as ArrayBuffer), 
+        new Uint8ClampedArray(result), 
         width, 
         height
       );
@@ -85,13 +84,11 @@ const App = () => {
       <Typography variant="h4" sx={{ my: 4 }}>CV-Pipe WASM Dashboard</Typography>
       
       <Stack direction="row" spacing={2} sx={{ mb: 4 }}>
-        {/* ファイルアップロードボタン */}
         <Button variant="outlined" component="label" disabled={!isWasmLoaded}>
           画像を読み込む
           <input type="file" accept="image/*" hidden onChange={handleImageUpload} />
         </Button>
 
-        {/* 処理実行ボタン */}
         <Button 
           variant="contained" 
           disabled={!isWasmLoaded} 
@@ -101,7 +98,6 @@ const App = () => {
         </Button>
       </Stack>
 
-      {/* Before / After 画像表示エリア */}
       <Stack direction="row" spacing={4}>
         <Box>
           <Typography variant="h6">Source (Before)</Typography>
