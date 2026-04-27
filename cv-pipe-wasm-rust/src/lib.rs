@@ -1,5 +1,6 @@
 use wasm_bindgen::prelude::*;
 use image::{ImageBuffer, Rgba, DynamicImage};
+use image::imageops::FilterType;
 
 #[wasm_bindgen]
 pub struct CvPipe {
@@ -37,7 +38,40 @@ impl CvPipe {
         self.data = gray_rgba.into_raw();
     }
 
+    pub fn resize(&mut self, new_width: u32, new_height: u32) {
+        let raw_data = std::mem::take(&mut self.data);
+
+        let img_buffer: ImageBuffer<Rgba<u8>, Vec<u8>> = 
+            ImageBuffer::from_raw(self.width, self.height, raw_data)
+                .expect("Failed to create ImageBuffer from raw data");
+
+        let dyn_img = DynamicImage::ImageRgba8(img_buffer);
+
+        // resize_exact: アスペクト比を無視して、強制的に指定サイズに変換します。
+        // ※アスペクト比を維持したい場合は、dyn_img.resize(...) を使用しますが、
+        // 戻り値のサイズが指定値と変わる可能性があるため、Canvasとの連携を考慮して
+        // ここでは resize_exact を使用しています。
+        // FilterType::Triangle は速度と品質のバランスが良い一般的なアルゴリズム(バイリニア相当)です。
+        let resized_img = dyn_img.resize_exact(new_width, new_height, FilterType::Triangle);
+
+        // RGBAの ImageBuffer に変換
+        let resized_rgba = resized_img.into_rgba8();
+
+        // 構造体の状態（データ、幅、高さ）を新しいものに更新する
+        self.data = resized_rgba.into_raw();
+        self.width = new_width;
+        self.height = new_height;
+    }
+
     pub fn get_data(&self) -> Vec<u8> {
         self.data.clone()
+    }
+
+    pub fn get_width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn get_height(&self) -> u32 {
+        self.height
     }
 }

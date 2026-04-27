@@ -35,7 +35,10 @@ const App = () => {
     };
   };
 
-  const handleProcess = () => {
+  // ------------------------------------
+  // 1. グレースケール変換処理 (既存)
+  // ------------------------------------
+  const handleGrayScale = () => {
     const srcCanvas = sourceCanvasRef.current;
     const resCanvas = resultCanvasRef.current;
     if (!srcCanvas || !resCanvas) return;
@@ -46,31 +49,88 @@ const App = () => {
     const width = srcCanvas.width;
     const height = srcCanvas.height;
     
+    // 画像が読み込まれていない場合はスキップ
+    if (width === 0 || height === 0) return;
+
     const imageData = ctx.getImageData(0, 0, width, height);
     const data = new Uint8Array(imageData.data.buffer);
 
     try {
-      console.time("WASM Processing");
+      console.time("WASM Grayscale Processing");
 
-      // CvPipe インスタンスを作成して処理
       const pipe = new CvPipe(data, width, height);
       pipe.to_gray();
       const result = pipe.get_data();
-      
-      // 【重要】メモリリークを防ぐため、WASM側のRust構造体を破棄する
       pipe.free();
 
-      console.timeEnd("WASM Processing");
+      console.timeEnd("WASM Grayscale Processing");
 
       resCanvas.width = width;
       resCanvas.height = height;
       const resCtx = resCanvas.getContext('2d');
       
-      // 【重要】 result.buffer ではなく result を直接渡す
       const resultImageData = new ImageData(
         new Uint8ClampedArray(result), 
         width, 
         height
+      );
+      resCtx?.putImageData(resultImageData, 0, 0);
+      
+    } catch (e) {
+      console.error("Rust execution failed:", e);
+    }
+  };
+
+  // ------------------------------------
+  // 2. リサイズ処理 (新規追加)
+  // ------------------------------------
+  const handleResize = () => {
+    const srcCanvas = sourceCanvasRef.current;
+    const resCanvas = resultCanvasRef.current;
+    if (!srcCanvas || !resCanvas) return;
+
+    const ctx = srcCanvas.getContext('2d');
+    if (!ctx) return;
+
+    const width = srcCanvas.width;
+    const height = srcCanvas.height;
+    
+    if (width === 0 || height === 0) return;
+
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = new Uint8Array(imageData.data.buffer);
+
+    // 新しいサイズを計算（例として縦横50%に圧縮）
+    // ※ 1未満にならないよう Math.max を使用
+    const targetWidth = Math.max(1, Math.floor(width * 0.5));
+    const targetHeight = Math.max(1, Math.floor(height * 0.5));
+
+    try {
+      console.time("WASM Resize Processing");
+
+      const pipe = new CvPipe(data, width, height);
+      
+      // WASM側でリサイズ実行
+      pipe.resize(targetWidth, targetHeight);
+      
+      // リサイズされたデータと、新しい縦横サイズを取得
+      const result = pipe.get_data();
+      const newWidth = pipe.get_width();
+      const newHeight = pipe.get_height();
+      
+      pipe.free();
+
+      console.timeEnd("WASM Resize Processing");
+
+      // 【重要】Result側のCanvasサイズを、WASMから取得した「新しいサイズ」に合わせる
+      resCanvas.width = newWidth;
+      resCanvas.height = newHeight;
+      const resCtx = resCanvas.getContext('2d');
+      
+      const resultImageData = new ImageData(
+        new Uint8ClampedArray(result), 
+        newWidth, 
+        newHeight
       );
       resCtx?.putImageData(resultImageData, 0, 0);
       
@@ -89,16 +149,27 @@ const App = () => {
           <input type="file" accept="image/*" hidden onChange={handleImageUpload} />
         </Button>
 
+        {/* グレースケール用ボタン */}
         <Button 
           variant="contained" 
           disabled={!isWasmLoaded} 
-          onClick={handleProcess}
+          onClick={handleGrayScale}
         >
-          グレースケール変換実行
+          グレースケール変換
+        </Button>
+
+        {/* リサイズ用ボタン (新規追加) */}
+        <Button 
+          variant="contained" 
+          color="secondary"
+          disabled={!isWasmLoaded} 
+          onClick={handleResize}
+        >
+          50%にリサイズ
         </Button>
       </Stack>
 
-      <Stack direction="row" spacing={4}>
+      <Stack direction="row" spacing={4} alignItems="flex-start">
         <Box>
           <Typography variant="h6">Source (Before)</Typography>
           <canvas 
@@ -108,9 +179,10 @@ const App = () => {
         </Box>
         <Box>
           <Typography variant="h6">Result (After)</Typography>
+          {/* Result Canvas はリサイズ時に小さくなることが目で見てわかるように */}
           <canvas 
             ref={resultCanvasRef} 
-            style={{ maxWidth: '100%', border: '1px dashed #ccc' }} 
+            style={{ border: '1px solid #1976d2' }} 
           />
         </Box>
       </Stack>
