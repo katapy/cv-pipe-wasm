@@ -11,3 +11,16 @@ wasm-bindgen = "0.2"
 # 画像処理の基本計算用（自前実装の練習にも良い）
 image = { version = "0.24", features = ["jpeg", "png"] }
 imageproc = "0.23"
+js-sys = "0.3"
+console_error_panic_hook = "0.1"
+
+[dependencies.web-sys]
+version = "0.3"
+features = [
+    "HtmlCanvasElement",
+    "CanvasRenderingContext2d",
+    "ImageData",
+    "Window",
+    "Document",
+    "console"
+]

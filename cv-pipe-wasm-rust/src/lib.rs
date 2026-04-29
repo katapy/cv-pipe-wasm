@@ -2,6 +2,19 @@ use wasm_bindgen::prelude::*;
 use image::{ImageBuffer, Rgba, DynamicImage};
 use image::imageops::FilterType;
 
+macro_rules! console_log {
+    ($($t:tt)*) => {
+        #[cfg(target_arch = "wasm32")]
+        {
+            web_sys::console::log_1(&format!($($t)*).into());
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            println!($($t)*); // CLIでは標準出力を使う
+        }
+    }
+}
+
 #[wasm_bindgen]
 pub struct CvPipe {
     data: Vec<u8>,
@@ -18,6 +31,7 @@ impl CvPipe {
 
     // image クレートを使ったグレー化
     pub fn to_gray(&mut self) {
+        console_log!("start to gray");
         // 1. self.data の所有権を一時的に奪う (メモリコピーを避けるための高速化テクニック)
         let raw_data = std::mem::take(&mut self.data);
 
@@ -39,6 +53,7 @@ impl CvPipe {
     }
 
     pub fn resize(&mut self, new_width: u32, new_height: u32) {
+        console_log!("start to resize");
         let raw_data = std::mem::take(&mut self.data);
 
         let img_buffer: ImageBuffer<Rgba<u8>, Vec<u8>> = 
