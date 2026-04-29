@@ -1,4 +1,4 @@
-use cv_pipe_wasm::CvProcessor;
+use cv_pipe_wasm::core::CvProcessor;
 use std::env;
 use std::fs;
 
