@@ -52,6 +52,12 @@ jobs:
           cd cv-pipe-wasm-demo
           npm install
 
+      # Lintチェックを実行
+      - name: Run Lint
+        run: |
+          cd cv-pipe-wasm-demo
+          npm run lint
+
       - name: Build React App
         run: |
           cd cv-pipe-wasm-demo

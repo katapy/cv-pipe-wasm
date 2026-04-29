@@ -1,10 +1,11 @@
+import { Box,Button, Container, Stack, Typography } from '@mui/material';
 import React, { useRef } from 'react';
-import { Button, Container, Stack, Typography, Box } from '@mui/material';
-import { useCvPipe, type ImageResult } from './hooks/useCvPipe';
+
+import { type ImageResult,useCvPipe } from './hooks/useCvPipe';
 
 const App = () => {
   const { isReady, initImage, resetImage, applyGrayscale, applyResize } = useCvPipe();
-  
+
   const sourceCanvasRef = useRef<HTMLCanvasElement>(null);
   const resultCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -14,7 +15,11 @@ const App = () => {
     canvas.width = result.width;
     canvas.height = result.height;
     const ctx = canvas.getContext('2d');
-    const imageData = new ImageData(new Uint8ClampedArray(result.rgba), result.width, result.height);
+    const imageData = new ImageData(
+      new Uint8ClampedArray(result.rgba),
+      result.width,
+      result.height
+    );
     ctx?.putImageData(imageData, 0, 0);
   };
 
@@ -25,9 +30,9 @@ const App = () => {
 
     const buffer = await file.arrayBuffer();
     const bytes = new Uint8Array(buffer);
-    
+
     const result = initImage(bytes);
-    
+
     // アップロード時はSourceとResultの両方に描画
     drawToCanvas(sourceCanvasRef.current, result);
     drawToCanvas(resultCanvasRef.current, result);
@@ -35,26 +40,26 @@ const App = () => {
 
   // 個別処理のハンドラー
   const handleGrayScale = () => {
-    console.time("Grayscale");
+    console.time('Grayscale');
     const result = applyGrayscale();
     drawToCanvas(resultCanvasRef.current, result);
-    console.timeEnd("Grayscale");
+    console.timeEnd('Grayscale');
   };
 
   const handleResize = () => {
-    console.time("Resize");
+    console.time('Resize');
     const result = applyResize(0.5); // 50%縮小
     drawToCanvas(resultCanvasRef.current, result);
-    console.timeEnd("Resize");
+    console.timeEnd('Resize');
   };
 
   // 連携処理（チェーン）のハンドラー
   const handlePipeline = () => {
-    console.time("Pipeline (Gray -> Resize)");
-    applyGrayscale();           // まずグレースケール
+    console.time('Pipeline (Gray -> Resize)');
+    applyGrayscale(); // まずグレースケール
     const result = applyResize(0.5); // 続けてリサイズ（ここで結果を受け取る）
     drawToCanvas(resultCanvasRef.current, result);
-    console.timeEnd("Pipeline (Gray -> Resize)");
+    console.timeEnd('Pipeline (Gray -> Resize)');
   };
 
   const handleReset = () => {
@@ -64,8 +69,10 @@ const App = () => {
 
   return (
     <Container>
-      <Typography variant="h4" sx={{ my: 4 }}>CV-Pipe WASM Dashboard</Typography>
-      
+      <Typography variant="h4" sx={{ my: 4 }}>
+        CV-Pipe WASM Dashboard
+      </Typography>
+
       <Stack direction="row" spacing={2} sx={{ mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <Button variant="outlined" component="label" disabled={!isReady}>
           画像を読み込む
@@ -94,17 +101,11 @@ const App = () => {
       <Stack direction="row" spacing={4} sx={{ alignItems: 'flex-start' }}>
         <Box sx={{ width: '50%' }}>
           <Typography variant="h6">Source (Original)</Typography>
-          <canvas 
-            ref={sourceCanvasRef} 
-            style={{ maxWidth: '100%', border: '1px dashed #ccc' }} 
-          />
+          <canvas ref={sourceCanvasRef} style={{ maxWidth: '100%', border: '1px dashed #ccc' }} />
         </Box>
         <Box sx={{ width: '50%' }}>
           <Typography variant="h6">Result (Processed)</Typography>
-          <canvas 
-            ref={resultCanvasRef} 
-            style={{ maxWidth: '100%', border: '1px solid #1976d2' }} 
-          />
+          <canvas ref={resultCanvasRef} style={{ maxWidth: '100%', border: '1px solid #1976d2' }} />
         </Box>
       </Stack>
     </Container>

@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useCallback,useEffect, useRef, useState } from 'react';
+
 import init, { CvPipe } from '../pkg/cv_pipe_wasm';
 import wasmUrl from '../pkg/cv_pipe_wasm_bg.wasm?url';
 
@@ -10,7 +11,7 @@ export type ImageResult = {
 
 export const useCvPipe = () => {
   const [isReady, setIsReady] = useState(false);
-  
+
   // WASMのインスタンスとオリジナル画像を保持（再レンダリングを防ぐためuseRefを使用）
   const pipeRef = useRef<CvPipe | null>(null);
   const originalBytesRef = useRef<Uint8Array | null>(null);
@@ -20,10 +21,10 @@ export const useCvPipe = () => {
     let isMounted = true;
     init(wasmUrl)
       .then(() => {
-        console.log("WASM Initialized");
+        console.log('WASM Initialized');
         if (isMounted) setIsReady(true);
       })
-      .catch((err) => console.error("WASM init failed:", err));
+      .catch((err) => console.error('WASM init failed:', err));
 
     // アンマウント時にWASM側のメモリを解放 (重要)
     return () => {
@@ -46,15 +47,18 @@ export const useCvPipe = () => {
   }, []);
 
   // 2. 画像の読み込み（インスタンスの生成）
-  const initImage = useCallback((bytes: Uint8Array): ImageResult | null => {
-    // 既存のメモリを解放
-    if (pipeRef.current) pipeRef.current.free();
-    
-    originalBytesRef.current = bytes;
-    pipeRef.current = new CvPipe(bytes);
-    
-    return getResult();
-  }, [getResult]);
+  const initImage = useCallback(
+    (bytes: Uint8Array): ImageResult | null => {
+      // 既存のメモリを解放
+      if (pipeRef.current) pipeRef.current.free();
+
+      originalBytesRef.current = bytes;
+      pipeRef.current = new CvPipe(bytes);
+
+      return getResult();
+    },
+    [getResult]
+  );
 
   // 3. 画像のリセット（最初の状態に戻す）
   const resetImage = useCallback((): ImageResult | null => {
@@ -69,16 +73,19 @@ export const useCvPipe = () => {
     return getResult();
   }, [getResult]);
 
-  const applyResize = useCallback((scale: number): ImageResult | null => {
-    if (!pipeRef.current) return null;
-    const currentWidth = pipeRef.current.get_width();
-    const currentHeight = pipeRef.current.get_height();
-    const targetWidth = Math.max(1, Math.floor(currentWidth * scale));
-    const targetHeight = Math.max(1, Math.floor(currentHeight * scale));
-    
-    pipeRef.current.apply_resize(targetWidth, targetHeight);
-    return getResult();
-  }, [getResult]);
+  const applyResize = useCallback(
+    (scale: number): ImageResult | null => {
+      if (!pipeRef.current) return null;
+      const currentWidth = pipeRef.current.get_width();
+      const currentHeight = pipeRef.current.get_height();
+      const targetWidth = Math.max(1, Math.floor(currentWidth * scale));
+      const targetHeight = Math.max(1, Math.floor(currentHeight * scale));
+
+      pipeRef.current.apply_resize(targetWidth, targetHeight);
+      return getResult();
+    },
+    [getResult]
+  );
 
   return {
     isReady,
