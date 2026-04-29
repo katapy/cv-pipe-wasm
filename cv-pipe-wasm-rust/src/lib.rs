@@ -1,3 +1,4 @@
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 use image::DynamicImage;
 use image::imageops::FilterType;
@@ -20,6 +21,12 @@ pub struct CvProcessor {
 }
 
 impl CvProcessor {
+    /// バイト列から画像を生成します。
+    ///
+    /// # Errors
+    ///
+    /// 渡された `data` がサポートされていない画像フォーマットの場合や、
+    /// データが破損している場合に `image::ImageError` を返します。
     pub fn from_bytes(data: &[u8]) -> Result<Self, image::ImageError> {
         let img = image::load_from_memory(data)?;
         Ok(Self { img })
@@ -56,13 +63,21 @@ impl CvPipe {
         }
     }
 
-    pub fn apply_grayscale(&mut self) { self.processor.to_gray(); }
-    pub fn apply_resize(&mut self, w: u32, h: u32) { self.processor.resize(w, h); }
+    pub fn apply_grayscale(&mut self) {
+        self.processor.to_gray();
+    }
+    pub fn apply_resize(&mut self, w: u32, h: u32) {
+        self.processor.resize(w, h);
+    }
 
     pub fn get_rgba_data(&self) -> Vec<u8> {
         self.processor.img.to_rgba8().into_raw()
     }
 
-    pub fn get_width(&self) -> u32 { self.processor.img.width() }
-    pub fn get_height(&self) -> u32 { self.processor.img.height() }
+    pub fn get_width(&self) -> u32 {
+        self.processor.img.width()
+    }
+    pub fn get_height(&self) -> u32 {
+        self.processor.img.height()
+    }
 }

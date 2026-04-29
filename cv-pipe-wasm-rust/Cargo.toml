@@ -24,3 +24,12 @@ features = [
     "Document",
     "console"
 ]
+
+[lints.rust]
+unused_variables = "deny"
+unused_imports = "deny"
+dead_code = "deny"
+
+[lints.clippy]
+all = "deny"
+pedantic = "deny"

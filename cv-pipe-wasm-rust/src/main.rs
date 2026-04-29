@@ -18,7 +18,7 @@ fn main() {
 
     // 2. 処理ロジックの初期化（WASM側と全く同じ from_bytes を使用）
     let mut processor = CvProcessor::from_bytes(&data).expect("画像のデコードに失敗しました");
-    
+
     // 現在の画像の幅と高さを取得する
     let width = processor.img.width();
     let height = processor.img.height();
@@ -28,7 +28,10 @@ fn main() {
     processor.resize(width / 2, height / 2);
 
     // 4. 保存
-    processor.img.save(output_path).expect("画像の保存に失敗しました");
-    
-    println!("完了: {}", output_path);
+    processor
+        .img
+        .save(output_path)
+        .expect("画像の保存に失敗しました");
+
+    println!("完了: {output_path}");
 }
