@@ -1,163 +1,109 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useRef } from 'react';
 import { Button, Container, Stack, Typography, Box } from '@mui/material';
-import init, { CvPipe } from './pkg/cv_pipe_wasm';
-import wasmUrl from './pkg/cv_pipe_wasm_bg.wasm?url';
+import { useCvPipe, type ImageResult } from './hooks/useCvPipe';
 
 const App = () => {
-  const [isWasmLoaded, setIsWasmLoaded] = useState(false);
-  const [imageBytes, setImageBytes] = useState<Uint8Array | null>(null);
+  const { isReady, initImage, resetImage, applyGrayscale, applyResize } = useCvPipe();
   
   const sourceCanvasRef = useRef<HTMLCanvasElement>(null);
   const resultCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  useEffect(() => {
-    init(wasmUrl)
-      .then(() => {
-        console.log("WASM Initialized");
-        setIsWasmLoaded(true);
-      })
-      .catch((err) => console.error("WASM init failed:", err));
-  }, []);
+  // Canvasに結果を描画する共通関数
+  const drawToCanvas = (canvas: HTMLCanvasElement | null, result: ImageResult | null) => {
+    if (!canvas || !result) return;
+    canvas.width = result.width;
+    canvas.height = result.height;
+    const ctx = canvas.getContext('2d');
+    const imageData = new ImageData(new Uint8ClampedArray(result.rgba), result.width, result.height);
+    ctx?.putImageData(imageData, 0, 0);
+  };
 
+  // 画像アップロード処理
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const buffer = await file.arrayBuffer();
     const bytes = new Uint8Array(buffer);
-    setImageBytes(bytes);
-
-    try {
-      const pipe = new CvPipe(bytes);
-      const width = pipe.get_width();
-      const height = pipe.get_height();
-      const rgba = pipe.get_rgba_data();
-      pipe.free();
-
-      const canvas = sourceCanvasRef.current;
-      if (canvas) {
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        const imageData = new ImageData(new Uint8ClampedArray(rgba), width, height);
-        ctx?.putImageData(imageData, 0, 0);
-      }
-    } catch (e) {
-      console.error("Failed to decode image:", e);
-    }
+    
+    const result = initImage(bytes);
+    
+    // アップロード時はSourceとResultの両方に描画
+    drawToCanvas(sourceCanvasRef.current, result);
+    drawToCanvas(resultCanvasRef.current, result);
   };
 
-  // ------------------------------------
-  // 1. グレースケール変換処理
-  // ------------------------------------
+  // 個別処理のハンドラー
   const handleGrayScale = () => {
-    if (!imageBytes) return; // 画像バイナリがない場合はスキップ
-
-    try {
-      console.time("WASM Grayscale Processing");
-      const pipe = new CvPipe(imageBytes);
-      
-      pipe.apply_grayscale();
-      const result = pipe.get_rgba_data();
-      const width = pipe.get_width();
-      const height = pipe.get_height();
-      pipe.free();
-      console.timeEnd("WASM Grayscale Processing");
-
-      // 結果をCanvasに描画
-      const resCanvas = resultCanvasRef.current;
-      if (resCanvas) {
-        resCanvas.width = width;
-        resCanvas.height = height;
-        const resCtx = resCanvas.getContext('2d');
-        const resultImageData = new ImageData(new Uint8ClampedArray(result), width, height);
-        resCtx?.putImageData(resultImageData, 0, 0);
-      }
-    } catch (e) {
-      console.error("Rust execution failed:", e);
-    }
+    console.time("Grayscale");
+    const result = applyGrayscale();
+    drawToCanvas(resultCanvasRef.current, result);
+    console.timeEnd("Grayscale");
   };
 
-  // ------------------------------------
-  // 2. リサイズ処理
-  // ------------------------------------
   const handleResize = () => {
-    if (!imageBytes) return;
+    console.time("Resize");
+    const result = applyResize(0.5); // 50%縮小
+    drawToCanvas(resultCanvasRef.current, result);
+    console.timeEnd("Resize");
+  };
 
-    try {
-      console.time("WASM Resize Processing");
-      const pipe = new CvPipe(imageBytes);
-      
-      // WASM側からデコード済みのサイズを取得してターゲットサイズを計算
-      const originalWidth = pipe.get_width();
-      const originalHeight = pipe.get_height();
-      const targetWidth = Math.max(1, Math.floor(originalWidth * 0.5));
-      const targetHeight = Math.max(1, Math.floor(originalHeight * 0.5));
+  // 連携処理（チェーン）のハンドラー
+  const handlePipeline = () => {
+    console.time("Pipeline (Gray -> Resize)");
+    applyGrayscale();           // まずグレースケール
+    const result = applyResize(0.5); // 続けてリサイズ（ここで結果を受け取る）
+    drawToCanvas(resultCanvasRef.current, result);
+    console.timeEnd("Pipeline (Gray -> Resize)");
+  };
 
-      pipe.apply_resize(targetWidth, targetHeight);
-      
-      const result = pipe.get_rgba_data();
-      const newWidth = pipe.get_width();
-      const newHeight = pipe.get_height();
-      pipe.free();
-      console.timeEnd("WASM Resize Processing");
-      
-      const resCanvas = resultCanvasRef.current;
-      if (resCanvas) {
-        resCanvas.width = newWidth;
-        resCanvas.height = newHeight;
-        const resCtx = resCanvas.getContext('2d');
-        const resultImageData = new ImageData(new Uint8ClampedArray(result), newWidth, newHeight);
-        resCtx?.putImageData(resultImageData, 0, 0);
-      }
-    } catch (e) {
-      console.error("Rust execution failed:", e);
-    }
+  const handleReset = () => {
+    const result = resetImage();
+    drawToCanvas(resultCanvasRef.current, result);
   };
 
   return (
     <Container>
       <Typography variant="h4" sx={{ my: 4 }}>CV-Pipe WASM Dashboard</Typography>
       
-      <Stack direction="row" spacing={2} sx={{ mb: 4 }}>
-        <Button variant="outlined" component="label" disabled={!isWasmLoaded}>
+      <Stack direction="row" spacing={2} sx={{ mb: 4, flexWrap: 'wrap', gap: 2 }}>
+        <Button variant="outlined" component="label" disabled={!isReady}>
           画像を読み込む
           <input type="file" accept="image/*" hidden onChange={handleImageUpload} />
         </Button>
 
-        {/* グレースケール用ボタン */}
-        <Button 
-          variant="contained" 
-          disabled={!isWasmLoaded} 
-          onClick={handleGrayScale}
-        >
-          グレースケール変換
+        <Button variant="contained" disabled={!isReady} onClick={handleGrayScale}>
+          グレースケール
         </Button>
 
-        {/* リサイズ用ボタン */}
-        <Button 
-          variant="contained" 
-          color="secondary"
-          disabled={!isWasmLoaded} 
-          onClick={handleResize}
-        >
-          50%にリサイズ
+        <Button variant="contained" color="secondary" disabled={!isReady} onClick={handleResize}>
+          50%リサイズ
+        </Button>
+
+        {/* 連携処理ボタン */}
+        <Button variant="contained" color="success" disabled={!isReady} onClick={handlePipeline}>
+          グレースケール ＆ リサイズ
+        </Button>
+
+        {/* 元に戻すボタン */}
+        <Button variant="text" color="error" disabled={!isReady} onClick={handleReset}>
+          画像をリセット
         </Button>
       </Stack>
 
       <Stack direction="row" spacing={4} sx={{ alignItems: 'flex-start' }}>
-        <Box>
-          <Typography variant="h6">Source (Before)</Typography>
+        <Box sx={{ width: '50%' }}>
+          <Typography variant="h6">Source (Original)</Typography>
           <canvas 
             ref={sourceCanvasRef} 
             style={{ maxWidth: '100%', border: '1px dashed #ccc' }} 
           />
         </Box>
-        <Box>
-          <Typography variant="h6">Result (After)</Typography>
+        <Box sx={{ width: '50%' }}>
+          <Typography variant="h6">Result (Processed)</Typography>
           <canvas 
             ref={resultCanvasRef} 
-            style={{ border: '1px solid #1976d2' }} 
+            style={{ maxWidth: '100%', border: '1px solid #1976d2' }} 
           />
         </Box>
       </Stack>
