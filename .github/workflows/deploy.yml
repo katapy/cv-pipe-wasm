@@ -18,7 +18,61 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # =========================================================
+  # Job 1: コードの品質チェックとセキュリティチェック
+  # =========================================================
+  lint-and-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # --- 1-1. Rust のセットアップと Lint ---
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cv-pipe-wasm-rust
+      
+      - name: Check Rust Format
+        working-directory: ./cv-pipe-wasm-rust
+        run: cargo fmt --check
+
+      - name: Check Rust Clippy
+        working-directory: ./cv-pipe-wasm-rust
+        run: cargo clippy -- -D warnings
+
+      # 補足: cargo install cargo-auditはコンパイルに数分かかるため、
+      # taiki-e/install-actionを使ってバイナリを爆速(数秒)でダウンロードします。
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@cargo-audit
+
+      - name: Audit Rust crates (Security Check)
+        working-directory: ./cv-pipe-wasm-rust
+        run: cargo audit
+
+      # --- 1-2. React のセットアップと Lint ---
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: cv-pipe-wasm-demo/package-lock.json
+
+      - name: Install Dependencies
+        working-directory: ./cv-pipe-wasm-demo
+        # CI環境では再現性の高い npm ci を使用します
+        run: npm ci --legacy-peer-deps
+
+      - name: Run React Lint
+        working-directory: ./cv-pipe-wasm-demo
+        run: npm run lint
+
+  # =========================================================
+  # Job 2: ビルドと GitHub Pages へのデプロイ
+  # =========================================================
   build-and-deploy:
+    # lint-and-audit ジョブが成功した場合のみ実行する（無駄なビルドを防ぐ）
+    needs: lint-and-audit
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -28,42 +82,37 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # --- 1. Rust & WASM のビルド ---
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      # --- 2-1. Rust & WASM のビルド ---
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cv-pipe-wasm-rust
 
       - name: Install wasm-pack
+        # 公式スクリプトによるインストール（バイナリを直接DLするため高速で安定しています）
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
       - name: Build WASM
-        # Rustのディレクトリへ移動してビルド（出力先はReactのsrc/pkg）
-        run: |
-          cd cv-pipe-wasm-rust
-          wasm-pack build --target web --out-dir ../cv-pipe-wasm-demo/src/pkg
+        working-directory: ./cv-pipe-wasm-rust
+        run: wasm-pack build --target web --out-dir ../cv-pipe-wasm-demo/src/pkg
 
-      # --- 2. React のビルド ---
+      # --- 2-2. React のビルド ---
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
+          cache-dependency-path: cv-pipe-wasm-demo/package-lock.json
 
       - name: Install Dependencies
-        run: |
-          cd cv-pipe-wasm-demo
-          npm install --legacy-peer-deps
-
-      # Lintチェックを実行
-      - name: Run Lint
-        run: |
-          cd cv-pipe-wasm-demo
-          npm run lint
+        working-directory: ./cv-pipe-wasm-demo
+        run: npm ci --legacy-peer-deps
 
       - name: Build React App
-        run: |
-          cd cv-pipe-wasm-demo
-          npm run build
+        working-directory: ./cv-pipe-wasm-demo
+        run: npm run build
 
-      # --- 3. GitHub Pages へのデプロイ ---
+      # --- 2-3. GitHub Pages へのデプロイ ---
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
