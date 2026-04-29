@@ -5,7 +5,7 @@ pub struct CvProcessor {
 }
 
 impl CvProcessor {
-    /// バイト列から画像をデコードして CvProcessor インスタンスを生成します。
+    /// バイト列から画像をデコードして `CvProcessor` インスタンスを生成します。
     ///
     /// # Arguments
     ///
