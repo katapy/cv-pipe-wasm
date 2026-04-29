@@ -1,20 +1,10 @@
+#[macro_use]
+mod macros;
+
 use image::DynamicImage;
 use image::imageops::FilterType;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
-
-#[cfg(target_arch = "wasm32")]
-macro_rules! console_log {
-    ($($t:tt)*) => {
-        web_sys::console::log_1(&format!($($t)*).into());
-    }
-}
-#[cfg(not(target_arch = "wasm32"))]
-macro_rules! console_log {
-    ($($t:tt)*) => {
-        println!($($t)*);
-    }
-}
 
 pub struct CvProcessor {
     pub img: DynamicImage,
