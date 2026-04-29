@@ -36,7 +36,7 @@ const App = () => {
   };
 
   // ------------------------------------
-  // 1. グレースケール変換処理 (既存)
+  // 1. グレースケール変換処理
   // ------------------------------------
   const handleGrayScale = () => {
     const srcCanvas = sourceCanvasRef.current;
@@ -59,8 +59,11 @@ const App = () => {
       console.time("WASM Grayscale Processing");
 
       const pipe = new CvPipe(data, width, height);
-      pipe.to_gray();
-      const result = pipe.get_data();
+      
+      // Rust側のメソッド名に合わせる
+      pipe.apply_grayscale();
+      const result = pipe.get_rgba_data();
+      
       pipe.free();
 
       console.timeEnd("WASM Grayscale Processing");
@@ -82,7 +85,7 @@ const App = () => {
   };
 
   // ------------------------------------
-  // 2. リサイズ処理 (新規追加)
+  // 2. リサイズ処理
   // ------------------------------------
   const handleResize = () => {
     const srcCanvas = sourceCanvasRef.current;
@@ -110,27 +113,25 @@ const App = () => {
 
       const pipe = new CvPipe(data, width, height);
       
-      // WASM側でリサイズ実行
-      pipe.resize(targetWidth, targetHeight);
+      // WASM側でリサイズ実行（Rust側のメソッド名に合わせる）
+      pipe.apply_resize(targetWidth, targetHeight);
       
-      // リサイズされたデータと、新しい縦横サイズを取得
-      const result = pipe.get_data();
-      const newWidth = pipe.get_width();
-      const newHeight = pipe.get_height();
+      // リサイズされたデータを取得
+      const result = pipe.get_rgba_data();
+
+      resCanvas.width = pipe.get_width();
+      resCanvas.height = pipe.get_height();
       
       pipe.free();
 
       console.timeEnd("WASM Resize Processing");
-
-      // 【重要】Result側のCanvasサイズを、WASMから取得した「新しいサイズ」に合わせる
-      resCanvas.width = newWidth;
-      resCanvas.height = newHeight;
+      
       const resCtx = resCanvas.getContext('2d');
       
       const resultImageData = new ImageData(
         new Uint8ClampedArray(result), 
-        newWidth, 
-        newHeight
+        targetWidth, 
+        targetHeight
       );
       resCtx?.putImageData(resultImageData, 0, 0);
       
@@ -158,7 +159,7 @@ const App = () => {
           グレースケール変換
         </Button>
 
-        {/* リサイズ用ボタン (新規追加) */}
+        {/* リサイズ用ボタン */}
         <Button 
           variant="contained" 
           color="secondary"
@@ -179,7 +180,6 @@ const App = () => {
         </Box>
         <Box>
           <Typography variant="h6">Result (After)</Typography>
-          {/* Result Canvas はリサイズ時に小さくなることが目で見てわかるように */}
           <canvas 
             ref={resultCanvasRef} 
             style={{ border: '1px solid #1976d2' }} 
