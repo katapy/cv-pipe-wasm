@@ -5,6 +5,7 @@ import wasmUrl from './pkg/cv_pipe_wasm_bg.wasm?url';
 
 const App = () => {
   const [isWasmLoaded, setIsWasmLoaded] = useState(false);
+  const [imageBytes, setImageBytes] = useState<Uint8Array | null>(null);
   
   const sourceCanvasRef = useRef<HTMLCanvasElement>(null);
   const resultCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -18,67 +19,60 @@ const App = () => {
       .catch((err) => console.error("WASM init failed:", err));
   }, []);
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const img = new Image();
-    img.src = URL.createObjectURL(file);
-    img.onload = () => {
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    setImageBytes(bytes);
+
+    try {
+      const pipe = new CvPipe(bytes);
+      const width = pipe.get_width();
+      const height = pipe.get_height();
+      const rgba = pipe.get_rgba_data();
+      pipe.free();
+
       const canvas = sourceCanvasRef.current;
-      if (!canvas) return;
-      
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      ctx?.drawImage(img, 0, 0);
-    };
+      if (canvas) {
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        const imageData = new ImageData(new Uint8ClampedArray(rgba), width, height);
+        ctx?.putImageData(imageData, 0, 0);
+      }
+    } catch (e) {
+      console.error("Failed to decode image:", e);
+    }
   };
 
   // ------------------------------------
   // 1. グレースケール変換処理
   // ------------------------------------
   const handleGrayScale = () => {
-    const srcCanvas = sourceCanvasRef.current;
-    const resCanvas = resultCanvasRef.current;
-    if (!srcCanvas || !resCanvas) return;
-
-    const ctx = srcCanvas.getContext('2d');
-    if (!ctx) return;
-
-    const width = srcCanvas.width;
-    const height = srcCanvas.height;
-    
-    // 画像が読み込まれていない場合はスキップ
-    if (width === 0 || height === 0) return;
-
-    const imageData = ctx.getImageData(0, 0, width, height);
-    const data = new Uint8Array(imageData.data.buffer);
+    if (!imageBytes) return; // 画像バイナリがない場合はスキップ
 
     try {
       console.time("WASM Grayscale Processing");
-
-      const pipe = new CvPipe(data, width, height);
+      const pipe = new CvPipe(imageBytes);
       
-      // Rust側のメソッド名に合わせる
       pipe.apply_grayscale();
       const result = pipe.get_rgba_data();
-      
+      const width = pipe.get_width();
+      const height = pipe.get_height();
       pipe.free();
-
       console.timeEnd("WASM Grayscale Processing");
 
-      resCanvas.width = width;
-      resCanvas.height = height;
-      const resCtx = resCanvas.getContext('2d');
-      
-      const resultImageData = new ImageData(
-        new Uint8ClampedArray(result), 
-        width, 
-        height
-      );
-      resCtx?.putImageData(resultImageData, 0, 0);
-      
+      // 結果をCanvasに描画
+      const resCanvas = resultCanvasRef.current;
+      if (resCanvas) {
+        resCanvas.width = width;
+        resCanvas.height = height;
+        const resCtx = resCanvas.getContext('2d');
+        const resultImageData = new ImageData(new Uint8ClampedArray(result), width, height);
+        resCtx?.putImageData(resultImageData, 0, 0);
+      }
     } catch (e) {
       console.error("Rust execution failed:", e);
     }
@@ -88,53 +82,34 @@ const App = () => {
   // 2. リサイズ処理
   // ------------------------------------
   const handleResize = () => {
-    const srcCanvas = sourceCanvasRef.current;
-    const resCanvas = resultCanvasRef.current;
-    if (!srcCanvas || !resCanvas) return;
-
-    const ctx = srcCanvas.getContext('2d');
-    if (!ctx) return;
-
-    const width = srcCanvas.width;
-    const height = srcCanvas.height;
-    
-    if (width === 0 || height === 0) return;
-
-    const imageData = ctx.getImageData(0, 0, width, height);
-    const data = new Uint8Array(imageData.data.buffer);
-
-    // 新しいサイズを計算（例として縦横50%に圧縮）
-    // ※ 1未満にならないよう Math.max を使用
-    const targetWidth = Math.max(1, Math.floor(width * 0.5));
-    const targetHeight = Math.max(1, Math.floor(height * 0.5));
+    if (!imageBytes) return;
 
     try {
       console.time("WASM Resize Processing");
-
-      const pipe = new CvPipe(data, width, height);
+      const pipe = new CvPipe(imageBytes);
       
-      // WASM側でリサイズ実行（Rust側のメソッド名に合わせる）
+      // WASM側からデコード済みのサイズを取得してターゲットサイズを計算
+      const originalWidth = pipe.get_width();
+      const originalHeight = pipe.get_height();
+      const targetWidth = Math.max(1, Math.floor(originalWidth * 0.5));
+      const targetHeight = Math.max(1, Math.floor(originalHeight * 0.5));
+
       pipe.apply_resize(targetWidth, targetHeight);
       
-      // リサイズされたデータを取得
       const result = pipe.get_rgba_data();
-
-      resCanvas.width = pipe.get_width();
-      resCanvas.height = pipe.get_height();
-      
+      const newWidth = pipe.get_width();
+      const newHeight = pipe.get_height();
       pipe.free();
-
       console.timeEnd("WASM Resize Processing");
       
-      const resCtx = resCanvas.getContext('2d');
-      
-      const resultImageData = new ImageData(
-        new Uint8ClampedArray(result), 
-        targetWidth, 
-        targetHeight
-      );
-      resCtx?.putImageData(resultImageData, 0, 0);
-      
+      const resCanvas = resultCanvasRef.current;
+      if (resCanvas) {
+        resCanvas.width = newWidth;
+        resCanvas.height = newHeight;
+        const resCtx = resCanvas.getContext('2d');
+        const resultImageData = new ImageData(new Uint8ClampedArray(result), newWidth, newHeight);
+        resCtx?.putImageData(resultImageData, 0, 0);
+      }
     } catch (e) {
       console.error("Rust execution failed:", e);
     }
