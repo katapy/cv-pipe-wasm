@@ -40,7 +40,6 @@ const App = () => {
     drawToCanvas(resultCanvasRef.current, result);
   };
 
-  // 汎用的な画像処理の実行ラッパー
   const executeProcess = (name: string, processFn: () => ImageResult | null) => {
     console.time(name);
     const result = processFn();
@@ -48,11 +47,7 @@ const App = () => {
     console.timeEnd(name);
   };
 
-  // ==========================================
-  // 個別処理のハンドラー
-  // ==========================================
-
-  // 輪郭を描画する（画像データは変更せず、Canvas上に線を引く）
+  // 輪郭を描画する
   const handleDrawContour = () => {
     console.time('Find Contour');
     const points = findMaxContourPoints();
@@ -67,7 +62,6 @@ const App = () => {
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
-    // 現在のCanvas画像の上に、赤色で抽出した輪郭（4点）を描画
     ctx.beginPath();
     ctx.moveTo(points[0], points[1]);
     ctx.lineTo(points[2], points[3]);
@@ -79,7 +73,7 @@ const App = () => {
     ctx.stroke();
   };
 
-  // 輪郭を抽出して、射影変換（パースペクティブ補正）を行うパイプライン
+  // 射影変換（ドキュメントスキャン）
   const handlePerspectiveScan = () => {
     console.time('Document Scan');
     const srcPoints = findMaxContourPoints();
@@ -90,7 +84,6 @@ const App = () => {
       return;
     }
 
-    // 抽出された4点の座標から、出力サイズ（幅と高さ）を計算
     const [tl_x, tl_y, tr_x, tr_y, br_x, br_y, bl_x, bl_y] = srcPoints;
 
     const widthA = Math.sqrt((br_x - bl_x) ** 2 + (br_y - bl_y) ** 2);
@@ -101,7 +94,6 @@ const App = () => {
     const heightB = Math.sqrt((tl_x - bl_x) ** 2 + (tl_y - bl_y) ** 2);
     const maxHeight = Math.max(heightA, heightB);
 
-    // 変換先の矩形座標（左上、右上、右下、左下の順）
     const dstPoints = new Float32Array([
       0, 0,
       maxWidth, 0,
@@ -109,7 +101,6 @@ const App = () => {
       0, maxHeight,
     ]);
 
-    // 射影変換を実行
     const result = applyPerspective(srcPoints, dstPoints);
     drawToCanvas(resultCanvasRef.current, result);
     console.timeEnd('Document Scan');
@@ -117,6 +108,7 @@ const App = () => {
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
+      {/* 修正2: Typography の fontWeight は sx 内に移動 */}
       <Typography variant="h4" sx={{ mb: 4, fontWeight: 'bold' }}>
         CV-Pipe WASM Dashboard
       </Typography>
@@ -125,12 +117,13 @@ const App = () => {
         {/* ==========================================
             左側：操作パネル（サイドバー）
         ========================================== */}
-        <Grid item xs={12} md={4} lg={3}>
+        {/* 修正1: <Grid item xs={12}> から item を削除し、MUI v6仕様 (size) に変更 */}
+        <Grid size={{ xs: 12, md: 4, lg: 3 }}>
           <Paper elevation={3} sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
             
-            {/* ファイル操作 */}
             <Box>
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              {/* 修正2: fontWeight="bold" を sx={{ fontWeight: 'bold' }} に修正 */}
+              <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>
                 ファイル操作
               </Typography>
               <Stack spacing={2}>
@@ -138,16 +131,10 @@ const App = () => {
                   画像を読み込む
                   <input type="file" accept="image/*" hidden onChange={handleImageUpload} />
                 </Button>
-                <Button
-                  variant="outlined"
-                  color="error"
-                  disabled={!isReady}
-                  onClick={() => {
+                <Button variant="outlined" color="error" disabled={!isReady} onClick={() => {
                     const result = resetImage();
                     drawToCanvas(resultCanvasRef.current, result);
-                  }}
-                  fullWidth
-                >
+                  }} fullWidth>
                   画像をリセット
                 </Button>
               </Stack>
@@ -155,9 +142,8 @@ const App = () => {
 
             <Divider />
 
-            {/* 色調補正 */}
             <Box>
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>
                 色調補正 (Color)
               </Typography>
               <Stack spacing={1}>
@@ -172,9 +158,8 @@ const App = () => {
 
             <Divider />
 
-            {/* 変形 */}
             <Box>
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>
                 変形 (Transform)
               </Typography>
               <Stack spacing={1}>
@@ -186,9 +171,8 @@ const App = () => {
 
             <Divider />
 
-            {/* フィルタ・解析 */}
             <Box>
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>
                 解析 (Analysis)
               </Typography>
               <Stack spacing={1}>
@@ -200,31 +184,20 @@ const App = () => {
 
             <Divider />
 
-            {/* 連携処理（パイプライン） */}
             <Box>
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+              <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>
                 連携処理 (Pipeline)
               </Typography>
               <Stack spacing={1}>
-                <Button
-                  variant="contained"
-                  color="secondary"
-                  disabled={!isReady}
-                  onClick={() => {
+                <Button variant="contained" color="secondary" disabled={!isReady} onClick={() => {
                     executeProcess('Pipeline (Gray -> Resize)', () => {
                       applyGrayscale();
                       return applyResize(0.5);
                     });
-                  }}
-                >
+                  }}>
                   Gray ＆ Resize
                 </Button>
-                <Button
-                  variant="contained"
-                  color="success"
-                  disabled={!isReady}
-                  onClick={handlePerspectiveScan}
-                >
+                <Button variant="contained" color="success" disabled={!isReady} onClick={handlePerspectiveScan}>
                   書類切り出し (Document Scan)
                 </Button>
               </Stack>
@@ -236,7 +209,8 @@ const App = () => {
         {/* ==========================================
             右側：画像プレビューエリア
         ========================================== */}
-        <Grid item xs={12} md={8} lg={9}>
+        {/* 修正1: <Grid item xs={12}> から item を削除し、MUI v6仕様 (size) に変更 */}
+        <Grid size={{ xs: 12, md: 8, lg: 9 }}>
           <Paper elevation={0} variant="outlined" sx={{ p: 3, height: '100%', bgcolor: '#f8f9fa' }}>
             <Stack direction={{ xs: 'column', lg: 'row' }} spacing={4} sx={{ alignItems: 'flex-start' }}>
               
