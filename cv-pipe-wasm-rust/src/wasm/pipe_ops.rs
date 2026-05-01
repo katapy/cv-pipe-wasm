@@ -4,6 +4,14 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 impl CvPipe {
+    pub fn apply_blur(&mut self, sigma: f32) {
+        self.processor.to_blur(sigma);
+    }
+
+    pub fn apply_canny(&mut self, low_threshold: f32, high_threshold: f32) {
+        self.processor.to_canny(low_threshold, high_threshold);
+    }
+
     pub fn apply_grayscale(&mut self) {
         self.processor.to_gray();
     }

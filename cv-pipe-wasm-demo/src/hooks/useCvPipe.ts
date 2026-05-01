@@ -16,7 +16,7 @@ export const useCvPipe = () => {
   const pipeRef = useRef<CvPipe | null>(null);
   const originalBytesRef = useRef<Uint8Array | null>(null);
 
-  // 1. WASMの初期化
+  // WASMの初期化
   useEffect(() => {
     let isMounted = true;
     init(wasmUrl)
@@ -46,7 +46,7 @@ export const useCvPipe = () => {
     };
   }, []);
 
-  // 2. 画像の読み込み（インスタンスの生成）
+  // 画像の読み込み（インスタンスの生成）
   const initImage = useCallback(
     (bytes: Uint8Array): ImageResult | null => {
       // 既存のメモリを解放
@@ -60,13 +60,33 @@ export const useCvPipe = () => {
     [getResult]
   );
 
-  // 3. 画像のリセット（最初の状態に戻す）
+  // 画像のリセット（最初の状態に戻す）
   const resetImage = useCallback((): ImageResult | null => {
     if (!originalBytesRef.current) return null;
     return initImage(originalBytesRef.current);
   }, [initImage]);
 
-  // 4. 各種画像処理（インスタンスを使い回すため、連続適用が可能）
+  // 【追加】ぼかし（ガウシアンブラー等）
+  const applyBlur = useCallback(
+    (sigma: number): ImageResult | null => {
+      if (!pipeRef.current) return null;
+      pipeRef.current.apply_blur(sigma);
+      return getResult();
+    },
+    [getResult]
+  );
+
+  // 【追加】Cannyエッジ検出
+  const applyCanny = useCallback(
+    (lowThreshold: number, highThreshold: number): ImageResult | null => {
+      if (!pipeRef.current) return null;
+      pipeRef.current.apply_canny(lowThreshold, highThreshold);
+      return getResult();
+    },
+    [getResult]
+  );
+
+  // 各種画像処理（インスタンスを使い回すため、連続適用が可能）
   const applyGrayscale = useCallback((): ImageResult | null => {
     if (!pipeRef.current) return null;
     pipeRef.current.apply_grayscale();
@@ -129,6 +149,8 @@ export const useCvPipe = () => {
     isReady,
     initImage,
     resetImage,
+    applyBlur,
+    applyCanny,
     applyGrayscale,
     applyResize,
     applyThreshold,
