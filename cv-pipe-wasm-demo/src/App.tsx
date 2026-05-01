@@ -113,7 +113,6 @@ const App = () => {
 
     // 4. エッジ画像から最大輪郭を取得
     const srcPoints = findMaxContourPoints();
-    console.log("srcPoints", srcPoints.length)
 
     if (!srcPoints || srcPoints.length !== 8) {
       alert('対象の輪郭が見つかりません。Cannyのパラメータを調整してください。');
