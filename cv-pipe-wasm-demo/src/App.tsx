@@ -1,15 +1,23 @@
-import { Box,Button, Container, Stack, Typography } from '@mui/material';
+import { Box, Button, Container, Divider, Grid, Paper, Stack, Typography } from '@mui/material';
 import React, { useRef } from 'react';
 
-import { type ImageResult,useCvPipe } from './hooks/useCvPipe';
+import { type ImageResult, useCvPipe } from './hooks/useCvPipe';
 
 const App = () => {
-  const { isReady, initImage, resetImage, applyGrayscale, applyResize } = useCvPipe();
+  const {
+    isReady,
+    initImage,
+    resetImage,
+    applyGrayscale,
+    applyResize,
+    applyThreshold,
+    findMaxContourPoints,
+    applyPerspective,
+  } = useCvPipe();
 
   const sourceCanvasRef = useRef<HTMLCanvasElement>(null);
   const resultCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Canvasに結果を描画する共通関数
   const drawToCanvas = (canvas: HTMLCanvasElement | null, result: ImageResult | null) => {
     if (!canvas || !result) return;
     canvas.width = result.width;
@@ -23,91 +31,237 @@ const App = () => {
     ctx?.putImageData(imageData, 0, 0);
   };
 
-  // 画像アップロード処理
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
     const buffer = await file.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-
-    const result = initImage(bytes);
-
-    // アップロード時はSourceとResultの両方に描画
+    const result = initImage(new Uint8Array(buffer));
     drawToCanvas(sourceCanvasRef.current, result);
     drawToCanvas(resultCanvasRef.current, result);
   };
 
+  // 汎用的な画像処理の実行ラッパー
+  const executeProcess = (name: string, processFn: () => ImageResult | null) => {
+    console.time(name);
+    const result = processFn();
+    drawToCanvas(resultCanvasRef.current, result);
+    console.timeEnd(name);
+  };
+
+  // ==========================================
   // 個別処理のハンドラー
-  const handleGrayScale = () => {
-    console.time('Grayscale');
-    const result = applyGrayscale();
-    drawToCanvas(resultCanvasRef.current, result);
-    console.timeEnd('Grayscale');
+  // ==========================================
+
+  // 輪郭を描画する（画像データは変更せず、Canvas上に線を引く）
+  const handleDrawContour = () => {
+    console.time('Find Contour');
+    const points = findMaxContourPoints();
+    console.timeEnd('Find Contour');
+
+    if (!points || points.length !== 8) {
+      alert('輪郭が見つかりませんでした。');
+      return;
+    }
+
+    const canvas = resultCanvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+
+    // 現在のCanvas画像の上に、赤色で抽出した輪郭（4点）を描画
+    ctx.beginPath();
+    ctx.moveTo(points[0], points[1]);
+    ctx.lineTo(points[2], points[3]);
+    ctx.lineTo(points[4], points[5]);
+    ctx.lineTo(points[6], points[7]);
+    ctx.closePath();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'red';
+    ctx.stroke();
   };
 
-  const handleResize = () => {
-    console.time('Resize');
-    const result = applyResize(0.5); // 50%縮小
-    drawToCanvas(resultCanvasRef.current, result);
-    console.timeEnd('Resize');
-  };
+  // 輪郭を抽出して、射影変換（パースペクティブ補正）を行うパイプライン
+  const handlePerspectiveScan = () => {
+    console.time('Document Scan');
+    const srcPoints = findMaxContourPoints();
 
-  // 連携処理（チェーン）のハンドラー
-  const handlePipeline = () => {
-    console.time('Pipeline (Gray -> Resize)');
-    applyGrayscale(); // まずグレースケール
-    const result = applyResize(0.5); // 続けてリサイズ（ここで結果を受け取る）
-    drawToCanvas(resultCanvasRef.current, result);
-    console.timeEnd('Pipeline (Gray -> Resize)');
-  };
+    if (!srcPoints || srcPoints.length !== 8) {
+      alert('対象の輪郭が見つかりません。');
+      console.timeEnd('Document Scan');
+      return;
+    }
 
-  const handleReset = () => {
-    const result = resetImage();
+    // 抽出された4点の座標から、出力サイズ（幅と高さ）を計算
+    const [tl_x, tl_y, tr_x, tr_y, br_x, br_y, bl_x, bl_y] = srcPoints;
+
+    const widthA = Math.sqrt((br_x - bl_x) ** 2 + (br_y - bl_y) ** 2);
+    const widthB = Math.sqrt((tr_x - tl_x) ** 2 + (tr_y - tl_y) ** 2);
+    const maxWidth = Math.max(widthA, widthB);
+
+    const heightA = Math.sqrt((tr_x - br_x) ** 2 + (tr_y - br_y) ** 2);
+    const heightB = Math.sqrt((tl_x - bl_x) ** 2 + (tl_y - bl_y) ** 2);
+    const maxHeight = Math.max(heightA, heightB);
+
+    // 変換先の矩形座標（左上、右上、右下、左下の順）
+    const dstPoints = new Float32Array([
+      0, 0,
+      maxWidth, 0,
+      maxWidth, maxHeight,
+      0, maxHeight,
+    ]);
+
+    // 射影変換を実行
+    const result = applyPerspective(srcPoints, dstPoints);
     drawToCanvas(resultCanvasRef.current, result);
+    console.timeEnd('Document Scan');
   };
 
   return (
-    <Container>
-      <Typography variant="h4" sx={{ my: 4 }}>
+    <Container maxWidth="xl" sx={{ py: 4 }}>
+      <Typography variant="h4" sx={{ mb: 4, fontWeight: 'bold' }}>
         CV-Pipe WASM Dashboard
       </Typography>
 
-      <Stack direction="row" spacing={2} sx={{ mb: 4, flexWrap: 'wrap', gap: 2 }}>
-        <Button variant="outlined" component="label" disabled={!isReady}>
-          画像を読み込む
-          <input type="file" accept="image/*" hidden onChange={handleImageUpload} />
-        </Button>
+      <Grid container spacing={4}>
+        {/* ==========================================
+            左側：操作パネル（サイドバー）
+        ========================================== */}
+        <Grid item xs={12} md={4} lg={3}>
+          <Paper elevation={3} sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
+            
+            {/* ファイル操作 */}
+            <Box>
+              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                ファイル操作
+              </Typography>
+              <Stack spacing={2}>
+                <Button variant="contained" component="label" disabled={!isReady} fullWidth>
+                  画像を読み込む
+                  <input type="file" accept="image/*" hidden onChange={handleImageUpload} />
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  disabled={!isReady}
+                  onClick={() => {
+                    const result = resetImage();
+                    drawToCanvas(resultCanvasRef.current, result);
+                  }}
+                  fullWidth
+                >
+                  画像をリセット
+                </Button>
+              </Stack>
+            </Box>
 
-        <Button variant="contained" disabled={!isReady} onClick={handleGrayScale}>
-          グレースケール
-        </Button>
+            <Divider />
 
-        <Button variant="contained" color="secondary" disabled={!isReady} onClick={handleResize}>
-          50%リサイズ
-        </Button>
+            {/* 色調補正 */}
+            <Box>
+              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                色調補正 (Color)
+              </Typography>
+              <Stack spacing={1}>
+                <Button variant="outlined" disabled={!isReady} onClick={() => executeProcess('Grayscale', applyGrayscale)}>
+                  グレースケール
+                </Button>
+                <Button variant="outlined" disabled={!isReady} onClick={() => executeProcess('Threshold', () => applyThreshold(128))}>
+                  2値化 (Threshold: 128)
+                </Button>
+              </Stack>
+            </Box>
 
-        {/* 連携処理ボタン */}
-        <Button variant="contained" color="success" disabled={!isReady} onClick={handlePipeline}>
-          グレースケール ＆ リサイズ
-        </Button>
+            <Divider />
 
-        {/* 元に戻すボタン */}
-        <Button variant="text" color="error" disabled={!isReady} onClick={handleReset}>
-          画像をリセット
-        </Button>
-      </Stack>
+            {/* 変形 */}
+            <Box>
+              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                変形 (Transform)
+              </Typography>
+              <Stack spacing={1}>
+                <Button variant="outlined" disabled={!isReady} onClick={() => executeProcess('Resize', () => applyResize(0.5))}>
+                  50%リサイズ
+                </Button>
+              </Stack>
+            </Box>
 
-      <Stack direction="row" spacing={4} sx={{ alignItems: 'flex-start' }}>
-        <Box sx={{ width: '50%' }}>
-          <Typography variant="h6">Source (Original)</Typography>
-          <canvas ref={sourceCanvasRef} style={{ maxWidth: '100%', border: '1px dashed #ccc' }} />
-        </Box>
-        <Box sx={{ width: '50%' }}>
-          <Typography variant="h6">Result (Processed)</Typography>
-          <canvas ref={resultCanvasRef} style={{ maxWidth: '100%', border: '1px solid #1976d2' }} />
-        </Box>
-      </Stack>
+            <Divider />
+
+            {/* フィルタ・解析 */}
+            <Box>
+              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                解析 (Analysis)
+              </Typography>
+              <Stack spacing={1}>
+                <Button variant="outlined" disabled={!isReady} onClick={handleDrawContour}>
+                  最大輪郭を描画 (赤枠)
+                </Button>
+              </Stack>
+            </Box>
+
+            <Divider />
+
+            {/* 連携処理（パイプライン） */}
+            <Box>
+              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                連携処理 (Pipeline)
+              </Typography>
+              <Stack spacing={1}>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  disabled={!isReady}
+                  onClick={() => {
+                    executeProcess('Pipeline (Gray -> Resize)', () => {
+                      applyGrayscale();
+                      return applyResize(0.5);
+                    });
+                  }}
+                >
+                  Gray ＆ Resize
+                </Button>
+                <Button
+                  variant="contained"
+                  color="success"
+                  disabled={!isReady}
+                  onClick={handlePerspectiveScan}
+                >
+                  書類切り出し (Document Scan)
+                </Button>
+              </Stack>
+            </Box>
+
+          </Paper>
+        </Grid>
+
+        {/* ==========================================
+            右側：画像プレビューエリア
+        ========================================== */}
+        <Grid item xs={12} md={8} lg={9}>
+          <Paper elevation={0} variant="outlined" sx={{ p: 3, height: '100%', bgcolor: '#f8f9fa' }}>
+            <Stack direction={{ xs: 'column', lg: 'row' }} spacing={4} sx={{ alignItems: 'flex-start' }}>
+              
+              <Box sx={{ width: { xs: '100%', lg: '50%' } }}>
+                <Typography variant="h6" color="text.secondary" gutterBottom>
+                  Source (Original)
+                </Typography>
+                <Box sx={{ border: '2px dashed #ccc', borderRadius: 2, overflow: 'hidden', minHeight: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#fff' }}>
+                  <canvas ref={sourceCanvasRef} style={{ width: '100%', height: 'auto', display: 'block' }} />
+                </Box>
+              </Box>
+
+              <Box sx={{ width: { xs: '100%', lg: '50%' } }}>
+                <Typography variant="h6" color="primary" gutterBottom>
+                  Result (Processed)
+                </Typography>
+                <Box sx={{ border: '2px solid #1976d2', borderRadius: 2, overflow: 'hidden', minHeight: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#fff' }}>
+                  <canvas ref={resultCanvasRef} style={{ width: '100%', height: 'auto', display: 'block' }} />
+                </Box>
+              </Box>
+              
+            </Stack>
+          </Paper>
+        </Grid>
+      </Grid>
     </Container>
   );
 };
