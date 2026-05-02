@@ -67,8 +67,20 @@ JS/TSから呼び出せるように、バインディング層にメソッドを
 ## ビルド・テスト
 ```bash
 # WebAssembly用ビルド
-wasm-pack build --target web
+wasm-pack build --target web --out-dir ../cv-pipe-wasm-demo/src/pkg
+
+# CLIでの動作確認
+cargo run -- sample.jpg output.png
 
 # Rustコアロジックのテスト
 cargo test
+
+# clippy 確認
+cargo clippy -- -D warnings
+
+# フォーマット確認
+cargo fmt --check
+
+# フォーマット設定
+cargo fmt
 ```

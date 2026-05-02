@@ -26,7 +26,7 @@ impl CvProcessor {
     /// // ignore: 画像ファイルの実データがないため、実行せずコンパイルのみチェックする
     /// use cv_pipe_wasm::core::CvProcessor;;
     ///
-    /// let data = include_bytes!("../../test.png");
+    /// let data = include_bytes!("../../sample.jpg");
     /// let processor = CvProcessor::from_bytes(&data[..]).expect("画像データの読み込みに失敗しました");
     /// ```
     pub fn from_bytes(data: &[u8]) -> Result<Self, image::ImageError> {
