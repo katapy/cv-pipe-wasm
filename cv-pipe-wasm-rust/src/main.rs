@@ -19,13 +19,14 @@ fn main() {
     // - processor: 最後に射影変換を行って保存するための綺麗なオリジナル画像
     // - analysis_processor: 輪郭を正確に見つけるための解析用画像
     let mut processor = CvProcessor::from_bytes(&data).expect("画像のデコードに失敗しました");
-    let mut analysis_processor = CvProcessor::from_bytes(&data).expect("画像のデコードに失敗しました");
+    let mut analysis_processor =
+        CvProcessor::from_bytes(&data).expect("画像のデコードに失敗しました");
 
     // ----------------------------------------------------
     // [Step 1] 解析用画像で輪郭を抽出する
     // ----------------------------------------------------
     println!("画像を解析中...");
-    
+
     // ノイズ除去（ぼかし） -> グレースケール -> Cannyエッジ検出
     analysis_processor.to_blur(1.5);
     analysis_processor.to_gray();
@@ -61,13 +62,13 @@ fn main() {
 
     // 変換先の長方形の座標 (左上, 右上, 右下, 左下)
     let dst = [
-        (0.0, 0.0),                     // 左上
-        (max_width, 0.0),               // 右上
-        (max_width, max_height),        // 右下
-        (0.0, max_height),              // 左下
+        (0.0, 0.0),              // 左上
+        (max_width, 0.0),        // 右上
+        (max_width, max_height), // 右下
+        (0.0, max_height),       // 左下
     ];
 
-    println!("切り出しサイズ: 幅 {} x 高さ {}", max_width as u32, max_height as u32);
+    println!("切り出しサイズ: 幅 {max_width} x 高さ {max_height}");
 
     // ----------------------------------------------------
     // [Step 3] オリジナル画像に対して射影変換（パースペクティブ補正）を実行

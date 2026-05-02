@@ -22,24 +22,26 @@ impl CvProcessor {
     /// // let mut processor = CvProcessor::from_bytes(data).unwrap();
     /// // processor.apply_perspective(...);
     /// ```
+    #[allow(clippy::needless_return)]
     pub fn to_perspective(
         &mut self,
         src_points: [(f32, f32); 4],
         dst_points: [(f32, f32); 4],
     ) -> bool {
-        if let Some(projection) = Projection::from_control_points(src_points, dst_points) {
-            let (_width, _height) = self.img.dimensions();
+        match Projection::from_control_points(src_points, dst_points) {
+            Some(projection) => {
+                let (_width, _height) = self.img.dimensions();
 
-            // 射影変換の適用
-            self.img = DynamicImage::ImageRgba8(warp(
-                &self.img.to_rgba8(),
-                &projection,
-                Interpolation::Bilinear,
-                image::Rgba([0, 0, 0, 0]),
-            ));
-            return true;
-        } else {
-            return false;
+                // 射影変換の適用
+                self.img = DynamicImage::ImageRgba8(warp(
+                    &self.img.to_rgba8(),
+                    &projection,
+                    Interpolation::Bilinear,
+                    image::Rgba([0, 0, 0, 0]),
+                ));
+                return true;
+            }
+            None => false,
         }
     }
 }
