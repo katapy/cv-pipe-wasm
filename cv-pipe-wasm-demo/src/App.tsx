@@ -134,7 +134,6 @@ const App = () => {
     );
 
     const dstPoints = new Float32Array([0, 0, maxWidth, 0, maxWidth, maxHeight, 0, maxHeight]);
-    
     // 元の画像に対してパースペクティブを適用
     const result = applyPerspective(srcPoints, dstPoints);
     drawToCanvas(resultCanvasRef.current, result);

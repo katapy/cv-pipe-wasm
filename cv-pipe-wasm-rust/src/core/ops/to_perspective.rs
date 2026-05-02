@@ -22,24 +22,24 @@ impl CvProcessor {
     /// // let mut processor = CvProcessor::from_bytes(data).unwrap();
     /// // processor.apply_perspective(...);
     /// ```
-    ///
-    /// # Panics
-    ///
-    /// 変換行列の計算に失敗した場合にパニックします。
-    /// （例: 4点が同一線上に並んでいる場合など）
-    pub fn to_perspective(&mut self, src_points: [(f32, f32); 4], dst_points: [(f32, f32); 4]) {
-        // 射影行列の計算
-        let projection = Projection::from_control_points(src_points, dst_points)
-            .expect("射影行列の計算に失敗しました");
+    pub fn to_perspective(
+        &mut self,
+        src_points: [(f32, f32); 4],
+        dst_points: [(f32, f32); 4],
+    ) -> bool {
+        if let Some(projection) = Projection::from_control_points(src_points, dst_points) {
+            let (_width, _height) = self.img.dimensions();
 
-        let (_width, _height) = self.img.dimensions();
-
-        // 射影変換の適用
-        self.img = DynamicImage::ImageRgba8(warp(
-            &self.img.to_rgba8(),
-            &projection,
-            Interpolation::Bilinear,
-            image::Rgba([0, 0, 0, 0]),
-        ));
+            // 射影変換の適用
+            self.img = DynamicImage::ImageRgba8(warp(
+                &self.img.to_rgba8(),
+                &projection,
+                Interpolation::Bilinear,
+                image::Rgba([0, 0, 0, 0]),
+            ));
+            return true;
+        } else {
+            return false;
+        }
     }
 }

@@ -28,11 +28,11 @@ impl CvPipe {
         self.processor.find_max_contour_points()
     }
 
-    pub fn apply_perspective(&mut self, src_flat: Float32Array, dst_flat: Float32Array) {
+    pub fn apply_perspective(&mut self, src_flat: Float32Array, dst_flat: Float32Array) -> bool {
         let src = to_points(src_flat);
         let dst = to_points(dst_flat);
 
-        self.processor.to_perspective(src, dst);
+        return self.processor.to_perspective(src, dst);
     }
 }
 

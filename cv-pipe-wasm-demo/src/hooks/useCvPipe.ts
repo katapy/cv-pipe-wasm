@@ -139,7 +139,8 @@ export const useCvPipe = () => {
       const src = srcPoints instanceof Float32Array ? srcPoints : new Float32Array(srcPoints);
       const dst = dstPoints instanceof Float32Array ? dstPoints : new Float32Array(dstPoints);
       
-      pipeRef.current.apply_perspective(src, dst);
+      const result = pipeRef.current.apply_perspective(src, dst);
+      if(!result) alert("変換に失敗しました！")
       return getResult();
     },
     [getResult]
